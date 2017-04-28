@@ -1,51 +1,59 @@
 package librato
 
-type BufferedChan interface {
+// Chan represents a channel.
+type Chan interface {
+	// Push pushes the given item to the channel
 	Push(item interface{})
+	// Pop gets and remove an item from the channel.
+	// This method is blocking, only returns ok=false
+	// if the channel is closed.
 	Pop() (item interface{}, ok bool)
+	// Close closes the channel. It's a prerequisite for Wait()
 	Close()
+	// Wait blocks until the channel is closed.
 	Wait()
 }
 
-// bufferedChan
-type bufferedChan struct {
+// FlexibleChan is a dynamically resizing channel.
+// It has a minimum capacity of "ms".
+type FlexibleChan struct {
 	rx   chan interface{}
 	tx   chan interface{}
 	quit chan struct{}
-	buf  *queue
+	buf  *Queue
 	ms   int
 }
 
-func newBufferedChan(ms int) *bufferedChan {
-	ch := &bufferedChan{
+func NewFlexibleChan(ms int) *FlexibleChan {
+	ch := &FlexibleChan{
 		rx:   make(chan interface{}, ms),
 		tx:   make(chan interface{}, ms),
 		quit: make(chan struct{}),
-		buf:  newQueue(2 << 10),
+		buf:  NewQueue(2 << 10),
 		ms:   ms,
 	}
 	go ch.work()
 	return ch
 }
 
-func (c *bufferedChan) Close() {
+func (c *FlexibleChan) Close() {
 	close(c.rx)
 }
 
-func (c *bufferedChan) Wait() {
+func (c *FlexibleChan) Wait() {
 	<-c.quit
 }
 
-func (c *bufferedChan) Push(item interface{}) {
+func (c *FlexibleChan) Push(item interface{}) {
 	c.rx <- item
 }
 
-func (c *bufferedChan) Pop() (interface{}, bool) {
+func (c *FlexibleChan) Pop() (interface{}, bool) {
 	item, ok := <-c.tx
 	return item, ok
 }
 
-func (c *bufferedChan) work() {
+func (c *FlexibleChan) work() {
 	var inCh, outCh chan interface{} = c.rx, nil
 	var inItem, outItem interface{}
 	var ok bool
@@ -74,12 +82,12 @@ func (c *bufferedChan) work() {
 				outCh = c.tx
 			} else {
 				// If it's already enabled, it means the channel is busy and we should buffer any new items.
-				c.buf.push(inItem)
+				c.buf.Push(inItem)
 			}
 
 		case outCh <- outItem:
 			// The write above will only succeed if outCh is not nil (cases with nil channels are never selected)
-			outItem, ok = c.buf.pop()
+			outItem, ok = c.buf.Pop()
 			if !ok {
 				if inCh == nil {
 					// The buffer is empty *and* the input channel is closed, which means we are stopping
