@@ -15,12 +15,12 @@ duration := time.Duration(5*time.Second)
 client := librato.NewTimeCollatedClient("user", "token", "source", duration)
 
 // You can use simple numeric values...
-client.GetGauge("my-gauge").Push(1)
+client.GetGauge("my-gauge").Input()<-1
 // ... or use custom properties
-client.GetCounter("my-counter").Push(map[string]interface{}{
+client.GetCounter("my-counter").Input()<-map[string]interface{}{
     "value": 1.5,
     "source": "example.com",
-})
+}
 
 // Close the library, and wait for all requests to finish.
 client.Close()

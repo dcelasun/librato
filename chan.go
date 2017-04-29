@@ -2,12 +2,10 @@ package librato
 
 // Chan represents a channel.
 type Chan interface {
-	// Push pushes the given item to the channel
-	Push(item interface{})
-	// Pop gets and remove an item from the channel.
-	// This method is blocking, only returns ok=false
-	// if the channel is closed.
-	Pop() (item interface{}, ok bool)
+	// Input returns a channel that can be written to.
+	Input() chan<- interface{}
+	// Output returns a channel to read from.
+	Output() <-chan interface{}
 	// Close closes the channel. It's a prerequisite for Wait()
 	Close()
 	// Wait blocks until the channel is closed.
@@ -44,13 +42,12 @@ func (c *FlexibleChan) Wait() {
 	<-c.quit
 }
 
-func (c *FlexibleChan) Push(item interface{}) {
-	c.rx <- item
+func (c *FlexibleChan) Input() chan<- interface{} {
+	return c.rx
 }
 
-func (c *FlexibleChan) Pop() (interface{}, bool) {
-	item, ok := <-c.tx
-	return item, ok
+func (c *FlexibleChan) Output() <-chan interface{} {
+	return c.tx
 }
 
 func (c *FlexibleChan) work() {

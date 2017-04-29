@@ -53,6 +53,7 @@ func (c *TimeCollatedClient) work() {
 	t := time.NewTicker(c.duration)
 	gauges := []interface{}{}
 	counters := []interface{}{}
+	closed := 0
 	for {
 		select {
 		case <-t.C:
@@ -63,19 +64,19 @@ func (c *TimeCollatedClient) work() {
 				})
 				gauges, counters = nil, nil
 			}
+		case item, ok := <-c.collateGauges.Output():
+			if !ok {
+				closed++
+				continue
+			}
+			gauges = append(gauges, item)
+		case item, ok := <-c.collateCounters.Output():
+			if !ok {
+				closed++
+				continue
+			}
+			counters = append(counters, item)
 		default:
-			closed := 0
-			if item, ok := c.collateGauges.Pop(); ok {
-				gauges = append(gauges, item)
-			} else {
-				closed++
-			}
-			if item, ok := c.collateCounters.Pop(); ok {
-				counters = append(counters, item)
-			} else {
-				closed++
-			}
-
 			if closed == 2 {
 				t.Stop()
 				c.makeRequest(map[string]interface{}{
@@ -84,7 +85,9 @@ func (c *TimeCollatedClient) work() {
 				})
 				gauges, counters = nil, nil
 				close(c.stop)
+				return
 			}
+			time.Sleep(1 * time.Second)
 		}
 	}
 }
@@ -160,33 +163,35 @@ func (c *TimeCollatedClient) makeRequest(body map[string]interface{}) error {
 func (c *TimeCollatedClient) runMetric(name string, ch Chan, collate Chan) {
 	c.wg.Add(1)
 	for {
-		item, ok := ch.Pop()
-		if !ok {
-			break
-		}
-
-		body := map[string]interface{}{
-			"name":         name,
-			"measure_time": time.Now().Unix(),
-		}
-		if c.source != "" {
-			body["source"] = c.source
-		}
-
-		switch typedItem := item.(type) {
-		case map[string]interface{}:
-			for k, v := range typedItem {
-				body[k] = v
+		select {
+		case item, ok := <-ch.Output():
+			if !ok {
+				c.wg.Done()
+				return
 			}
-		default:
-			body["value"] = item
-		}
 
-		if _, present := body["measure_time"]; !present {
-			body["measure_time"] = time.Now().Unix()
-		}
+			body := map[string]interface{}{
+				"name":         name,
+				"measure_time": time.Now().Unix(),
+			}
+			if c.source != "" {
+				body["source"] = c.source
+			}
 
-		collate.Push(body)
+			switch typedItem := item.(type) {
+			case map[string]interface{}:
+				for k, v := range typedItem {
+					body[k] = v
+				}
+			default:
+				body["value"] = item
+			}
+
+			if _, present := body["measure_time"]; !present {
+				body["measure_time"] = time.Now().Unix()
+			}
+
+			collate.Input() <- body
+		}
 	}
-	c.wg.Done()
 }
