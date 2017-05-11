@@ -54,6 +54,8 @@ func (c *TimeCollatedClient) work() {
 	gauges := []interface{}{}
 	counters := []interface{}{}
 	closed := 0
+	gaugeChan := c.collateGauges.Output()
+	counterChan := c.collateCounters.Output()
 	for {
 		select {
 		case <-t.C:
@@ -64,15 +66,17 @@ func (c *TimeCollatedClient) work() {
 				})
 				gauges, counters = nil, nil
 			}
-		case item, ok := <-c.collateGauges.Output():
+		case item, ok := <-gaugeChan:
 			if !ok {
 				closed++
+				gaugeChan = nil
 				continue
 			}
 			gauges = append(gauges, item)
-		case item, ok := <-c.collateCounters.Output():
+		case item, ok := <-counterChan:
 			if !ok {
 				closed++
+				counterChan = nil
 				continue
 			}
 			counters = append(counters, item)
