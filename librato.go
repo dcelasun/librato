@@ -5,6 +5,8 @@ package librato
 import (
 	"bytes"
 	"encoding/json"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"sync"
 	"time"
@@ -160,7 +162,11 @@ func (c *TimeCollatedClient) makeRequest(body map[string]interface{}) error {
 	}
 	req.Header.Add("Content-Type", "application/json")
 	req.SetBasicAuth(c.user, c.token)
-	_, err = c.client.Do(req)
+	res, err := c.client.Do(req)
+	if err == nil {
+		io.Copy(ioutil.Discard, res.Body)
+		res.Body.Close()
+	}
 	return err
 }
 
