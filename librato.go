@@ -10,6 +10,13 @@ import (
 	"net/http"
 	"sync"
 	"time"
+	"log"
+	"os"
+)
+
+var (
+	// Use this variable to set a custom logger or set it to nil to disable logging.
+	Logger = log.New(os.Stderr, "librato", log.LstdFlags)
 )
 
 type Client interface {
@@ -163,10 +170,20 @@ func (c *TimeCollatedClient) makeRequest(body map[string]interface{}) error {
 	req.Header.Add("Content-Type", "application/json")
 	req.SetBasicAuth(c.user, c.token)
 	res, err := c.client.Do(req)
-	if err == nil {
+	// Do not discard response body in case of Librato errors
+	// http://api-docs-archive.librato.com/#http-status-codes
+	if err == nil && res.StatusCode <= 204 {
 		io.Copy(ioutil.Discard, res.Body)
 		res.Body.Close()
 	}
+
+	// http://api-docs-archive.librato.com/#http-status-codes
+	if res.StatusCode > 204 && Logger != nil {
+		b, _ :=ioutil.ReadAll(res.Body)
+		res.Body.Close()
+		Logger.Printf("status:%d, error: %s\n", res.StatusCode, string(b))
+	}
+
 	return err
 }
 
