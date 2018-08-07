@@ -17,6 +17,12 @@ import (
 var (
 	// Use this variable to set a custom logger or set it to nil to disable logging.
 	Logger = log.New(os.Stderr, "librato", log.LstdFlags)
+
+	// Librato suggests max. 300 measurements per POST. There is also an undocumented
+	// payload size limit which triggers an HTTP 413 - Request Entity Too Large response.
+	// So the client will make a request either at MaxMetrics measurements or when the timer
+	// arrives, whichever happens first.
+	MaxMetrics = 300
 )
 
 type Client interface {
@@ -99,7 +105,16 @@ func (c *TimeCollatedClient) work() {
 				gauges, counters = nil, nil
 				close(c.stop)
 				return
+			} else if len(gauges) + len(counters) >= MaxMetrics {
+				// Librato doesn't like requests with more than ~300 metrics
+				// so we need to flush early, without waiting for the timer.
+				c.makeRequest(map[string]interface{}{
+					"gauges":   gauges,
+					"counters": counters,
+				})
+				gauges, counters = nil, nil
 			}
+
 			time.Sleep(1 * time.Second)
 		}
 	}
