@@ -98,20 +98,30 @@ func (c *TimeCollatedClient) work() {
 		default:
 			if closed == 2 {
 				t.Stop()
-				c.makeRequest(map[string]interface{}{
-					"gauges":   gauges,
-					"counters": counters,
-				})
+				params := map[string]interface{}{}
+				if len(gauges) > 0 {
+					params["gauges"] = gauges
+				}
+				if len(counters) > 0 {
+					params["counters"] = counters
+				}
+
+				c.makeRequest(params)
 				gauges, counters = nil, nil
 				close(c.stop)
 				return
 			} else if len(gauges) + len(counters) >= MaxMetrics {
 				// Librato doesn't like requests with more than ~300 metrics
 				// so we need to flush early, without waiting for the timer.
-				c.makeRequest(map[string]interface{}{
-					"gauges":   gauges,
-					"counters": counters,
-				})
+				params := map[string]interface{}{}
+				if len(gauges) > 0 {
+					params["gauges"] = gauges
+				}
+				if len(counters) > 0 {
+					params["counters"] = counters
+				}
+
+				c.makeRequest(params)
 				gauges, counters = nil, nil
 			}
 
