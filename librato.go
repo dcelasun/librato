@@ -57,7 +57,7 @@ type Link struct {
 type Client interface {
 	GetGauge(name string) Chan
 	GetCounter(name string) Chan
-	PostAnnotation(body Annotation, name string) error
+	PostAnnotation(body *Annotation, name string) error
 	Close()
 	Wait()
 }
@@ -248,6 +248,10 @@ func (c *TimeCollatedClient) makeRequest(data *bytes.Buffer, url string) error {
 	req.Header.Add("Content-Type", "application/json")
 	req.SetBasicAuth(c.user, c.token)
 	res, err := c.client.Do(req)
+	if res == nil {
+		return err
+	}
+
 	// Do not discard response body in case of Librato errors
 	// http://api-docs-archive.librato.com/#http-status-codes
 	if err == nil && res.StatusCode <= 204 {
