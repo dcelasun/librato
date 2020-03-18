@@ -9,12 +9,17 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 )
 
 var (
+	// Use this variable to set a custom logger or set it to nil to disable logging.
+	Logger = log.New(os.Stderr, "librato", log.LstdFlags)
+
 	// Librato suggests max. 300 measurements per POST. There is also an undocumented
 	// payload size limit which triggers an HTTP 413 - Request Entity Too Large response.
 	// So the client will make a request either at MaxMetrics measurements or when the timer
@@ -255,10 +260,9 @@ func (c *TimeCollatedClient) makeRequest(data *bytes.Buffer, url string) error {
 	}
 
 	// http://api-docs-archive.librato.com/#http-status-codes
-	if res.StatusCode > 204 {
+	if res.StatusCode > 204 && Logger != nil {
 		b, _ := ioutil.ReadAll(res.Body)
-		res.Body.Close()
-		return fmt.Errorf("unsuccessful request: response status: %d, error: %q", res.StatusCode, string(b))
+		Logger.Printf("status:%d, error: %s\n", res.StatusCode, string(b))
 	}
 
 	return nil
